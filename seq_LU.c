@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 #define SWAP(T, a, b) do {T tmp = a; a = b; b = tmp; } while (0)
 
@@ -13,6 +14,11 @@ void init_l(int n, double** m); /* Initialising the output L with lower triangul
 void init_u(int n, double** m); /* Initialising the output u with upper triangular values */
 void init_pi(int n, int* m); /* Initialising the output pi with linear ints */
 
+/* Funtions for verification of Convergence via L1 and L2 norms */
+void mat_mult(double** m1, double** m2, double** m3, int n); // compute L*U and save in a_prime
+void mat_rearrange(double** m, int* pi, int n); // compute a_reperm from a and pi
+void mat_sub(double** m1, double** m2, int n); // subtract a_reperm - a_prime and save in a_reperm
+double L2c1(double** m, int n); // computing the L2,1 norm of the difference, a_reperm
 
 int main(int argc, char* argv[]) {
 
@@ -25,6 +31,7 @@ int main(int argc, char* argv[]) {
 }   
 
 void LU(int n, int t){
+    // This storage mechanism gives seg fault at n = 590, but a cubic time increase is verifies
     double *a[n], *l[n], *u[n]; // Pointers to the matrice's rows
     double a_data[n*n], u_data[n*n], l_data[n*n]; // Where all data is stored
     int pi[n]; /* Here, the vector pi is a compact representation of a permutation matrix p(n,n), 
@@ -44,6 +51,9 @@ void LU(int n, int t){
     init_l(n, l);
     init_u(n, u);
     init_pi(n, pi);
+
+    clock_t t_clock; 
+    t_clock = clock(); 
 
     for(int k = 0; k < n; k++){  // k is the column here
         // Might Confuse indexing
@@ -87,8 +97,13 @@ void LU(int n, int t){
         // Complete for the this iteration of k
     }
 
-    // LU Computed. Now test for time, and L1/L2 convergence.
+    // LU Computed. Now testing for time, and L1/L2 convergence.
 
+    t_clock = clock() - t_clock; 
+    double time_taken = ((double)t_clock)/CLOCKS_PER_SEC; // in seconds 
+    printf("LU for n = %d took %f seconds to execute \n", n, time_taken);
+
+    
 
     return;
 }
@@ -133,6 +148,41 @@ void init_pi(int n, int* m){
         m[i] = i;
     }
     return;
+}
+
+void mat_mult(double** m1, double** m2, double** m3, int n){
+    for(int row = 0; row < n; row++){
+        for(int col = 0; col < n; col++){
+            double cursum = 0;
+            for(int k = 0; k < n; k++){
+                cursum += m1[row][k] * m2[col][k];
+            }
+            m3[row][col] = cursum;
+        }
+    }
+    return;
+}
+
+void mat_sub(double** m1, double** m2, int n){
+    for(int row = 0; row < n; row++){
+        for(int col = 0; col < n; col++){
+            m1[row][col] -= m2[row][col];
+        }
+    }
+    return;
+}
+
+double L2c1(double** m, int n){
+    // L2,1 norm of a matrix is the sum of L2 norms of the columns
+    double norm = 0;
+    for(int j = 0; j < n; j++){ // column j
+        double cur_norm = 0;
+        for(int i = 0; i < n; i++){
+            cur_norm += (m[i][j] * m[i][j]);
+        }
+        norm += sqrt(cur_norm);
+    }
+    return norm;
 }
 
 

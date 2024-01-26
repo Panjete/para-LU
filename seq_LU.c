@@ -14,10 +14,11 @@ void init_l(int n, double** m); /* Initialising the output L with lower triangul
 void init_u(int n, double** m); /* Initialising the output u with upper triangular values */
 void init_pi(int n, int* m); /* Initialising the output pi with linear ints */
 
-/* Funtions for verification of Convergence via L1 and L2 norms */
+/* Funtions for verification of Convergence via L2,1 norm */
 void mat_mult(double** m1, double** m2, double** m3, int n); // compute L*U and save in a_prime
 void mat_rearrange(double** m, int* pi, int n); // compute a_reperm from a and pi
 void mat_sub(double** m1, double** m2, int n); // subtract a_reperm - a_prime and save in a_reperm
+void mat_print(double** m, int n); // For Debugging and manual verif
 double L2c1(double** m, int n); // computing the L2,1 norm of the difference, a_reperm
 
 int main(int argc, char* argv[]) {
@@ -51,6 +52,9 @@ void LU(int n, int t){
     init_l(n, l);
     init_u(n, u);
     init_pi(n, pi);
+
+    printf("Matrix A at the start = \n");
+    mat_print(a, n);
 
     clock_t t_clock; 
     t_clock = clock(); 
@@ -103,7 +107,38 @@ void LU(int n, int t){
     double time_taken = ((double)t_clock)/CLOCKS_PER_SEC; // in seconds 
     printf("LU for n = %d took %f seconds to execute \n", n, time_taken);
 
-    
+    // Need an a_reperm matrix to find difference
+
+    double *a_reperm[n], *a_prime[n];
+    double a_reperm_data[n*n], a_prime_data[n*n];
+    for (int i = 0; i < n; i++){
+        a_reperm[i] = &(a_reperm_data[i * n]);
+        a_prime[i] = &(a_prime_data[i * n]);
+    }
+
+    mat_mult(l, u, a_prime, n);  // a_prime = LU
+
+    printf("Matrix LU  = \n");
+    mat_print(a_prime, n);
+
+    printf("Matrix A before Rearrange = \n");
+    mat_print(a, n);
+
+    printf("Pi = \n");
+    for(int i = 0; i < n; i++){printf("pi[%d] = %d \n",i,  pi[i]);}
+
+    mat_rearrange(a, pi, n);     // a is now = PA
+
+    printf("Matrix PA  = \n");
+    mat_print(a, n);
+
+    mat_sub(a, a_prime, n);      // a = PA - LU
+
+    printf("Matrix PA-LU  = \n");
+    mat_print(a, n);
+
+    double convg_error = L2c1(a, n);
+    printf("LU Convergence error for n = %d is %f  \n", n, convg_error);
 
     return;
 }
@@ -155,10 +190,24 @@ void mat_mult(double** m1, double** m2, double** m3, int n){
         for(int col = 0; col < n; col++){
             double cursum = 0;
             for(int k = 0; k < n; k++){
-                cursum += m1[row][k] * m2[col][k];
+                cursum += m1[row][k] * m2[k][col];
             }
             m3[row][col] = cursum;
         }
+    }
+    return;
+}
+
+void mat_rearrange(double** m, int* pi, int n){
+    // Now, goal is computing PA
+    // the pi[i] tells what row from m should be the ith row
+    // Thus, m[i] <- m[pi[i]]
+    double *b[n];
+    for(int i = 0; i < n; i++){
+        b[i] = m[i]; // Temp array for transfer
+    }
+    for(int i = 0; i < n; i++){
+        m[i] = b[pi[i]]; // store pointers after swapping
     }
     return;
 }
@@ -185,6 +234,15 @@ double L2c1(double** m, int n){
     return norm;
 }
 
+void mat_print(double** m, int n){
+    for(int row = 0; row < n; row++){
+        for(int col = 0; col < n; col++){
+            printf("%f ", m[row][col]);
+        }
+        printf("\n");
+    }
+    return;
+}
 
 /* 
 

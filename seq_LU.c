@@ -33,8 +33,8 @@ int main(int argc, char* argv[]) {
 
 void LU(int n, int t){
     // This storage mechanism gives seg fault at n = 590, but a cubic time increase is verifies
-    double *a[n], *l[n], *u[n]; // Pointers to the matrice's rows
-    double a_data[n*n], u_data[n*n], l_data[n*n]; // Where all data is stored
+    double *a[n], *l[n], *u[n], *pa[n]; // Pointers to the matrice's rows
+    double a_data[n*n], u_data[n*n], l_data[n*n], pa_data[n*n]; // Where all data is stored
     int pi[n]; /* Here, the vector pi is a compact representation of a permutation matrix p(n,n), 
                   which is very sparse. For the ith row of p, pi(i) stores the column index of
                   the sole position that contains a 1.*/
@@ -44,22 +44,26 @@ void LU(int n, int t){
         a[i] = &(a_data[i * n]); 
         l[i] = &(l_data[i * n]); 
         u[i] = &(u_data[i * n]); 
+        pa[i] = &(pa_data[i * n]);
     }
-
-
 
     init_a(n, a);
     init_l(n, l);
     init_u(n, u);
     init_pi(n, pi);
 
+    for(int i = 0; i < n*n; i++) {
+        pa_data[i] = a_data[i];
+    }
+    
     printf("Matrix A at the start = \n");
     mat_print(a, n);
 
     clock_t t_clock; 
     t_clock = clock(); 
 
-    for(int k = 0; k < n; k++){  // k is the column here
+    // k is the column here
+    for(int k = 0; k < n; k++){  
         // Might Confuse indexing
         // Remember we shifted from 1 indexing in pseudo-code to 0-indexing here
 
@@ -82,7 +86,7 @@ void LU(int n, int t){
         for(int jj = 0; jj < n; jj++){
             SWAP(double, a[k][jj], a[k_prime][jj]);
         }
-        for(int jj = 0; jj < k-1; jj++){
+        for(int jj = 0; jj < k; jj++){
             SWAP(double, l[k][jj], l[k_prime][jj]);
         }
         u[k][k] = a[k][k];
@@ -107,37 +111,37 @@ void LU(int n, int t){
     double time_taken = ((double)t_clock)/CLOCKS_PER_SEC; // in seconds 
     printf("LU for n = %d took %f seconds to execute \n", n, time_taken);
 
-    // Need an a_reperm matrix to find difference
-
-    double *a_reperm[n], *a_prime[n];
-    double a_reperm_data[n*n], a_prime_data[n*n];
+    double *a_prime[n];
+    double a_prime_data[n*n];
     for (int i = 0; i < n; i++){
-        a_reperm[i] = &(a_reperm_data[i * n]);
         a_prime[i] = &(a_prime_data[i * n]);
     }
 
+    // Now use permutation matrix to permute rows of A
+    for(int i = 0; i < n; i++) {
+        pa[i] = &(pa_data[pi[i]*n]);
+    }
+    
     mat_mult(l, u, a_prime, n);  // a_prime = LU
+
+    printf("matrix L = \n");
+    mat_print(l, n);
+
+    printf("matrix U = \n");
+    mat_print(u, n);
 
     printf("Matrix LU  = \n");
     mat_print(a_prime, n);
 
-    printf("Matrix A before Rearrange = \n");
-    mat_print(a, n);
-
     printf("Pi = \n");
     for(int i = 0; i < n; i++){printf("pi[%d] = %d \n",i,  pi[i]);}
 
-    mat_rearrange(a, pi, n);     // a is now = PA
-
-    printf("Matrix PA  = \n");
-    mat_print(a, n);
-
-    mat_sub(a, a_prime, n);      // a = PA - LU
+    mat_sub(pa, a_prime, n);      // a = PA - LU
 
     printf("Matrix PA-LU  = \n");
-    mat_print(a, n);
+    mat_print(pa, n);
 
-    double convg_error = L2c1(a, n);
+    double convg_error = L2c1(pa, n);
     printf("LU Convergence error for n = %d is %f  \n", n, convg_error);
 
     return;

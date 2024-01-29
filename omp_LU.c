@@ -21,7 +21,7 @@ void init_a(int n, double** m); /* Initialising the matrix with random values */
 void init_l(int n, double** m); /* Initialising the output L with lower triangular values */
 void init_u(int n, double** m); /* Initialising the output U with upper triangular values */
 void init_pi(int n, int* m); /* Initialising the output pi with linear ints */
-void init_pa(int n, double** m1, double** m2); /* Storing original A as pa, for verification of convergence later*/
+void init_pa(int n, double** m1, double** m2); /* Storing original A as pa, for verification of convergence later */
 
 /* Funtions for verification of Convergence via L2,1 norm */
 void mat_mult(double** m1, double** m2, double** m3, int n); // compute L*U and save in a_prime
@@ -68,9 +68,8 @@ void LU(int n, int t){
 {
     init_u(n, u);
 }
-    init_pi(n, pi);
-
-    init_pa(n, a, pa);
+    init_pi(n, pi);    // Internally Parallelised
+    init_pa(n, a, pa); // Internally Parallelised
     
     // printf("Matrix A at the start = \n");
     // mat_print(a, n);
@@ -150,7 +149,7 @@ void LU(int n, int t){
     // printf("Pi = \n");
     // for(int i = 0; i < n; i++){printf("pi[%d] = %d \n",i,  pi[i]);}
 
-    mat_sub(pa, a_prime, n);      // a = PA - LU
+    mat_sub(pa, a_prime, n);      // pa = PA - LU
 
     // printf("Matrix PA-LU  = \n");
     // mat_print(pa, n);
@@ -238,7 +237,7 @@ void init_l(int n, double** m){
 }
 
 void init_pi(int n, int* m){
-
+#pragma parallel for num_threads(t)
     for (int i = 0; i < n; i++){ // Row
         m[i] = i;
     }

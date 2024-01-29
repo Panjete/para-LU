@@ -11,13 +11,13 @@ void LU(int n, int t); /* Wrapper function for the decomposition */
 
 void init_a(int n, double** m); /* Initialising the matrix with random values */
 void init_l(int n, double** m); /* Initialising the output L with lower triangular values */
-void init_u(int n, double** m); /* Initialising the output u with upper triangular values */
+void init_u(int n, double** m); /* Initialising the output U with upper triangular values */
 void init_pi(int n, int* m); /* Initialising the output pi with linear ints */
 
 /* Funtions for verification of Convergence via L2,1 norm */
 void mat_mult(double** m1, double** m2, double** m3, int n); // compute L*U and save in a_prime
-void mat_rearrange(double** m, int* pi, int n); // compute a_reperm from a and pi
-void mat_sub(double** m1, double** m2, int n); // subtract a_reperm - a_prime and save in a_reperm
+void mat_rearrange(double** m, int* pi, int n); // compute PA from a and pi and save in pa
+void mat_sub(double** m1, double** m2, int n); // subtract pa - a_prime and save in pa
 void mat_print(double** m, int n); // For Debugging and manual verif
 double L2c1(double** m, int n); // computing the L2,1 norm of the difference, a_reperm
 
@@ -32,9 +32,7 @@ int main(int argc, char* argv[]) {
 }   
 
 void LU(int n, int t){
-    // This storage mechanism gives seg fault at n = 590, but a cubic time increase is verifies
-    double *a[n], *l[n], *u[n], *pa[n]; // Pointers to the matrice's rows
-    double a_data[n*n], u_data[n*n], l_data[n*n], pa_data[n*n]; // Where all data is stored
+    double *a[n], *l[n], *u[n], *pa[n], *a_prime[n]; // Pointers to the matrice's rows
     int pi[n]; /* Here, the vector pi is a compact representation of a permutation matrix p(n,n), 
                   which is very sparse. For the ith row of p, pi(i) stores the column index of
                   the sole position that contains a 1.*/
@@ -45,6 +43,7 @@ void LU(int n, int t){
         l[i] = (double*)malloc(n * sizeof(double));
         u[i] = (double*)malloc(n * sizeof(double));
         pa[i] = (double*)malloc(n * sizeof(double));
+        a_prime[i] = (double*)malloc(n * sizeof(double));
     }
 
     init_a(n, a);
@@ -111,19 +110,8 @@ void LU(int n, int t){
     double time_taken = ((double)t_clock)/CLOCKS_PER_SEC; // in seconds 
     printf("LU for n = %d took %f seconds to execute \n", n, time_taken);
 
-    double *a_prime[n];
-    for (int i = 0; i < n; i++){
-        a_prime[i] = (double*)malloc(n * sizeof(double));
-    }
-
     // Now use permutation matrix to permute rows of A
-    double *bbb[n];
-    for(int i = 0; i < n; i++){
-        bbb[i] = pa[i]; // Temp array for transfer
-    }
-    for(int i = 0; i < n; i++) {
-        pa[i] = bbb[pi[i]];
-    }
+    mat_rearrange(pa, pi, n);
 
     mat_mult(l, u, a_prime, n);  // a_prime = LU
 

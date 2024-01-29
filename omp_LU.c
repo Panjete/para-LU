@@ -11,8 +11,7 @@
 Components parallelised :-
 
 1) "parallel for" for setting pointer storing arrays of size n
-2) "parallel" at init_a/l/u/pi of size n^2, n^2, n^2 and n respectively
-
+2) "parallel" at init_a/l/u of size n^2, n^2 and n^2 respectively
 
 */
 
@@ -43,7 +42,7 @@ int main(int argc, char* argv[]) {
 void LU(int n, int t){
     // This storage mechanism gives seg fault at n = 590, but a cubic time increase is verifies
     double *a[n], *l[n], *u[n], *pa[n]; // Pointers to the matrice's rows
-    double a_data[n*n], u_data[n*n], l_data[n*n], pa_data[n*n]; // Where all data is stored
+    double a_data[n*n], pa_data[n*n]; // Where all data is stored
     int pi[n]; /* Here, the vector pi is a compact representation of a permutation matrix p(n,n), 
                   which is very sparse. For the ith row of p, pi(i) stores the column index of
                   the sole position that contains a 1.*/
@@ -51,8 +50,9 @@ void LU(int n, int t){
 #pragma parallel for num_threads(t)
     for (int i = 0; i < n; i++){
         a[i] = &(a_data[i * n]); 
-        l[i] = &(l_data[i * n]); 
-        u[i] = &(u_data[i * n]); 
+        //double l_data[n], u_data[n];
+        l[i] = (double*)malloc(n * sizeof(double));
+        u[i] = (double*)malloc(n * sizeof(double));
         pa[i] = &(pa_data[i * n]);
     }
 
@@ -77,8 +77,8 @@ void LU(int n, int t){
     // printf("Matrix A at the start = \n");
     // mat_print(a, n);
 
-    printf("Matrix L at the start = \n");
-    mat_print(l, n);
+    // printf("Matrix L at the start = \n");
+    // mat_print(l, n);
 
     // printf("Matrix U at the start = \n");
     // mat_print(u, n);
@@ -136,9 +136,9 @@ void LU(int n, int t){
     printf("LU for n = %d took %f seconds to execute \n", n, time_taken);
 
     double *a_prime[n];
-    double a_prime_data[n*n];
+
     for (int i = 0; i < n; i++){
-        a_prime[i] = &(a_prime_data[i * n]);
+        a_prime[i] = (double*)malloc(n * sizeof(double));
     }
 
     // Now use permutation matrix to permute rows of A
@@ -167,6 +167,13 @@ void LU(int n, int t){
 
     double convg_error = L2c1(pa, n);
     printf("LU Convergence error for n = %d is %f  \n", n, convg_error);
+
+
+    // Freeing space
+    for(int i = 0; i < n; i++){
+        free(u[i]);
+        free(l[i]);
+    }
 
     return;
 }

@@ -41,10 +41,10 @@ void LU(int n, int t){
 
 
     for (int i = 0; i < n; i++){
-        a[i] = &(a_data[i * n]); 
-        l[i] = &(l_data[i * n]); 
-        u[i] = &(u_data[i * n]); 
-        pa[i] = &(pa_data[i * n]);
+        a[i] = (double*)malloc(n * sizeof(double));
+        l[i] = (double*)malloc(n * sizeof(double));
+        u[i] = (double*)malloc(n * sizeof(double));
+        pa[i] = (double*)malloc(n * sizeof(double));
     }
 
     init_a(n, a);
@@ -53,7 +53,7 @@ void LU(int n, int t){
     init_pi(n, pi);
 
     for(int i = 0; i < n*n; i++) {
-        pa_data[i] = a_data[i];
+        pa[i/n][i%n] = a[i/n][i%n];
     }
     
     //printf("Matrix A at the start = \n");
@@ -112,16 +112,19 @@ void LU(int n, int t){
     printf("LU for n = %d took %f seconds to execute \n", n, time_taken);
 
     double *a_prime[n];
-    double a_prime_data[n*n];
     for (int i = 0; i < n; i++){
-        a_prime[i] = &(a_prime_data[i * n]);
+        a_prime[i] = (double*)malloc(n * sizeof(double));
     }
 
     // Now use permutation matrix to permute rows of A
-    for(int i = 0; i < n; i++) {
-        pa[i] = &(pa_data[pi[i]*n]);
+    double *bbb[n];
+    for(int i = 0; i < n; i++){
+        bbb[i] = pa[i]; // Temp array for transfer
     }
-    
+    for(int i = 0; i < n; i++) {
+        pa[i] = bbb[pi[i]];
+    }
+
     mat_mult(l, u, a_prime, n);  // a_prime = LU
 
     //printf("matrix L = \n");

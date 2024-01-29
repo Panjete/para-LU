@@ -42,18 +42,16 @@ int main(int argc, char* argv[]) {
 void LU(int n, int t){
     // This storage mechanism gives seg fault at n = 590, but a cubic time increase is verifies
     double *a[n], *l[n], *u[n], *pa[n]; // Pointers to the matrice's rows
-    double a_data[n*n], pa_data[n*n]; // Where all data is stored
     int pi[n]; /* Here, the vector pi is a compact representation of a permutation matrix p(n,n), 
                   which is very sparse. For the ith row of p, pi(i) stores the column index of
                   the sole position that contains a 1.*/
 
 #pragma parallel for num_threads(t)
     for (int i = 0; i < n; i++){
-        a[i] = &(a_data[i * n]); 
-        //double l_data[n], u_data[n];
+        a[i] = (double*)malloc(n * sizeof(double));
         l[i] = (double*)malloc(n * sizeof(double));
         u[i] = (double*)malloc(n * sizeof(double));
-        pa[i] = &(pa_data[i * n]);
+        pa[i] = (double*)malloc(n * sizeof(double));
     }
 
 #pragma parallel num_threads(t)
@@ -71,7 +69,7 @@ void LU(int n, int t){
     init_pi(n, pi);
 
     for(int i = 0; i < n*n; i++) {
-        pa_data[i] = a_data[i];
+        pa[i/n][i%n] = a[i/n][i%n];
     }
     
     // printf("Matrix A at the start = \n");
@@ -142,8 +140,12 @@ void LU(int n, int t){
     }
 
     // Now use permutation matrix to permute rows of A
+    double *bbb[n];
+    for(int i = 0; i < n; i++){
+        bbb[i] = pa[i]; // Temp array for transfer
+    }
     for(int i = 0; i < n; i++) {
-        pa[i] = &(pa_data[pi[i]*n]);
+        pa[i] = bbb[pi[i]];
     }
     
     mat_mult(l, u, a_prime, n);  // a_prime = LU
@@ -173,6 +175,9 @@ void LU(int n, int t){
     for(int i = 0; i < n; i++){
         free(u[i]);
         free(l[i]);
+        free(a_prime[i]);
+        free(a[i]);
+        free(pa[i]);
     }
 
     return;

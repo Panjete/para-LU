@@ -2,10 +2,19 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <omp.h>
 
 #define SWAP(T, a, b) do {T tmp = a; a = b; b = tmp; } while (0)
 
-/* Sequential Implementation of the LU decomposition as step 1 of the parallelisation procedure */
+/* Parallel Implementation of the LU decomposition , via OpenMP 
+
+Components parallelised :-
+
+1) "parallel for" for setting pointer storing arrays of size n
+2) "parallel" at init_a/l/u/pi of size n^2, n^2, n^2 and n respectively
+
+
+*/
 
 void LU(int n, int t); /* Wrapper function for the decomposition */
 
@@ -39,7 +48,7 @@ void LU(int n, int t){
                   which is very sparse. For the ith row of p, pi(i) stores the column index of
                   the sole position that contains a 1.*/
 
-
+#pragma parallel for num_threads(t)
     for (int i = 0; i < n; i++){
         a[i] = &(a_data[i * n]); 
         l[i] = &(l_data[i * n]); 
@@ -47,17 +56,32 @@ void LU(int n, int t){
         pa[i] = &(pa_data[i * n]);
     }
 
+#pragma parallel num_threads(t)
+{
     init_a(n, a);
+}
+#pragma parallel num_threads(t)
+{
     init_l(n, l);
+}
+#pragma parallel num_threads(t)
+{
     init_u(n, u);
+}
     init_pi(n, pi);
 
     for(int i = 0; i < n*n; i++) {
         pa_data[i] = a_data[i];
     }
     
-    //printf("Matrix A at the start = \n");
-    //mat_print(a, n);
+    // printf("Matrix A at the start = \n");
+    // mat_print(a, n);
+
+    printf("Matrix L at the start = \n");
+    mat_print(l, n);
+
+    // printf("Matrix U at the start = \n");
+    // mat_print(u, n);
 
     clock_t t_clock; 
     t_clock = clock(); 
@@ -124,22 +148,22 @@ void LU(int n, int t){
     
     mat_mult(l, u, a_prime, n);  // a_prime = LU
 
-    //printf("matrix L = \n");
-    //mat_print(l, n);
+    // printf("matrix L = \n");
+    // mat_print(l, n);
 
-    //printf("matrix U = \n");
-    //mat_print(u, n);
+    // printf("matrix U = \n");
+    // mat_print(u, n);
 
-    //printf("Matrix LU  = \n");
-    //mat_print(a_prime, n);
+    // printf("Matrix LU  = \n");
+    // mat_print(a_prime, n);
 
-    //printf("Pi = \n");
-    //for(int i = 0; i < n; i++){printf("pi[%d] = %d \n",i,  pi[i]);}
+    // printf("Pi = \n");
+    // for(int i = 0; i < n; i++){printf("pi[%d] = %d \n",i,  pi[i]);}
 
     mat_sub(pa, a_prime, n);      // a = PA - LU
 
-    //printf("Matrix PA-LU  = \n");
-   // mat_print(pa, n);
+    // printf("Matrix PA-LU  = \n");
+    // mat_print(pa, n);
 
     double convg_error = L2c1(pa, n);
     printf("LU Convergence error for n = %d is %f  \n", n, convg_error);
@@ -152,7 +176,18 @@ void init_a(int n, double** m){
     /* The drand48() function return non-negative, double-precision, floating-point values
       uniformly distributed over the interval [0.0 , 1.0]. */
 
-    for (int i = 0; i < n; i++){ // Row
+    int my_rank = omp_get_thread_num();
+    int thread_count = omp_get_num_threads();
+
+    int per_thread = n/thread_count;
+    int i_start = my_rank * per_thread;
+    int i_end   = i_start + per_thread;
+
+    if(my_rank == thread_count -1){i_end = n;}
+
+
+    srand(time(NULL)^my_rank);
+    for (int i = i_start; i < i_end; i++){ // Row
         for (int j = 0; j < n; j++){ // Column
             m[i][j] = drand48();
         }
@@ -162,8 +197,17 @@ void init_a(int n, double** m){
 
 void init_u(int n, double** m){
 
-    for (int i = 0; i < n; i++){ // Row
-        for (int j = 0; j < i; j++){ // Column
+    int my_rank = omp_get_thread_num();
+    int thread_count = omp_get_num_threads();
+
+    int per_thread = n/thread_count;
+    int i_start = my_rank * per_thread;
+    int i_end   = i_start + per_thread;
+
+    if(my_rank == thread_count -1){i_end = n;}
+
+    for (int i = i_start; i < i_end; i++){ // Row
+        for (int j = 0; j < n; j++){ // Column // REMEMBER : j < i for (below diagonal case), currently setting all to 0
             m[i][j] = 0; // Initialising matrix with 0s below the diagonal
         }
     }
@@ -172,8 +216,20 @@ void init_u(int n, double** m){
 
 void init_l(int n, double** m){
 
-    for (int i = 0; i < n; i++){ // Row
+    int my_rank = omp_get_thread_num();
+    int thread_count = omp_get_num_threads();
+
+    int per_thread = n/thread_count;
+    int i_start = my_rank * per_thread;
+    int i_end   = i_start + per_thread;
+
+    if(my_rank == thread_count -1){i_end = n;}
+
+    for (int i = i_start; i < i_end; i++){ // Row
         m[i][i] = 1;
+        for (int j = 0; j < i; j++){ // Column - this is unnecessary below diagonal zeroing as well
+            m[i][j] = 0;
+        }
         for (int j = i+1; j < n; j++){ // Column
             m[i][j] = 0;
         }
@@ -254,6 +310,6 @@ Gurarmaan
 
 Execute using command
 
-clang -Xclang -fopenmp -L/opt/homebrew/opt/libomp/lib -I/opt/homebrew/opt/libomp/include -lomp seq_LU.c -o exec.out
+clang -Xclang -fopenmp -L/opt/homebrew/opt/libomp/lib -I/opt/homebrew/opt/libomp/include -lomp omp_LU.c -o exec2.out
 
 */

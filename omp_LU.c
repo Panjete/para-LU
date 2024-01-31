@@ -12,6 +12,16 @@ Components parallelised :-
 
 1) "parallel for" for setting pointer storing arrays of size n
 2) "parallel" at init_a/l/u of size n^2, n^2 and n^2 respectively
+3) "parallel for" at init_pa of size n^2, which does copying of A
+
+
+4) "parallel for" at swapping rows of a and l
+5) "parallel for" at updating u, l and a
+
+
+
+To do : Test for n=8000
+
 
 */
 
@@ -22,6 +32,12 @@ void init_l(int n, double** m); /* Initialising the output L with lower triangul
 void init_u(int n, double** m); /* Initialising the output U with upper triangular values */
 void init_pi(int n, int* m); /* Initialising the output pi with linear ints */
 void init_pa(int n, double** m1, double** m2); /* Storing original A as pa, for verification of convergence later */
+
+int find_max(double** a, int n, int k);
+void swap_row(double** m, int r1, int r2, int k_upto); /* Swap R1 with R2, upto column k*/
+void upd_UL(double** a, int n, int k, double** u, double** l); /* Fill up the u & l matrices after the global kth iteration */
+void upd_A(double** a, int n, int k, double** u, double** l); /* Update a now that it's kth row has been processed */
+
 
 /* Funtions for verification of Convergence via L2,1 norm */
 void mat_mult(double** m1, double** m2, double** m3, int n); // compute L*U and save in a_prime
@@ -88,15 +104,9 @@ void LU(int n, int t){
         // Might Confuse indexing
         // Remember we shifted from 1 indexing in pseudo-code to 0-indexing here
 
-        double max = 0;
-        int k_prime; // store the row(i) with the max value (pivot) in this column (k)
-        for(int i = k ; i < n; i++){
-            if(max < fabs(a[i][k])){
-                max = fabs(a[i][k]);
-                k_prime = i;
-            }
-        }
-        if(max == 0){
+        int k_prime = find_max(a, n, k); // store the row(i) with the max value (pivot) in this column (k)
+        
+        if(k_prime == -1){
             printf("Error : Singular Matrix");
             return;
         }
@@ -104,25 +114,15 @@ void LU(int n, int t){
         // Now that pivot has been discovered, start swapping
 
         SWAP(int, pi[k], pi[k_prime]);
-        for(int jj = 0; jj < n; jj++){
-            SWAP(double, a[k][jj], a[k_prime][jj]);
-        }
-        for(int jj = 0; jj < k; jj++){
-            SWAP(double, l[k][jj], l[k_prime][jj]);
-        }
+        swap_row(a, k, k_prime, n);
+        swap_row(l, k, k_prime, k);
         u[k][k] = a[k][k];
 
-        // Swaps Completed. Now re-adjust l and u appropriately
+        // Swaps Completed. Now re-adjust l, u and a appropriately
 
-        for(int i = k+1; i < n; i++){
-            l[i][k] = a[i][k]/u[k][k];
-            u[k][i] = a[k][i];
-        }
-        for(int i = k+1; i < n; i++){
-            for(int j = k+1; j < n; j++){
-                a[i][j] = a[i][j] - l[i][k]*u[k][j];
-            }
-        }
+        upd_UL(a, n, k, u, l);
+        upd_A(a, n, k, u, l);
+
         // Complete for the this iteration of k
     }
 
@@ -136,19 +136,19 @@ void LU(int n, int t){
     mat_rearrange(pa, pi, n);
     
     mat_mult(l, u, a_prime, n);  // a_prime = LU
+/*
+    printf("matrix L = \n");
+    mat_print(l, n);
 
-    // printf("matrix L = \n");
-    // mat_print(l, n);
+    printf("matrix U = \n");
+    mat_print(u, n);
 
-    // printf("matrix U = \n");
-    // mat_print(u, n);
+    printf("Matrix LU  = \n");
+    mat_print(a_prime, n);
 
-    // printf("Matrix LU  = \n");
-    // mat_print(a_prime, n);
-
-    // printf("Pi = \n");
-    // for(int i = 0; i < n; i++){printf("pi[%d] = %d \n",i,  pi[i]);}
-
+    printf("Pi = \n");
+    for(int i = 0; i < n; i++){printf("pi[%d] = %d \n",i,  pi[i]);}
+*/
     mat_sub(pa, a_prime, n);      // pa = PA - LU
 
     // printf("Matrix PA-LU  = \n");
@@ -251,6 +251,59 @@ void init_pa(int n, double** m1, double** m2){
     }
     return;
 }
+
+/* LU functions */
+
+int find_max(double** a, int n, int k){
+    int k_prime = -1;
+    double max = 0;
+    for(int i = k ; i < n; i++){
+        if(max < fabs(a[i][k])){
+            max = fabs(a[i][k]);
+            k_prime = i;
+        }
+    }
+    return k_prime;
+}
+
+void swap_row(double** m, int r1, int r2, int k_upto){
+    
+#pragma parallel for num_threads(t) 
+    for(int jj = 0; jj < k_upto; jj++){
+        double temp = m[r1][jj];
+        m[r1][jj] = m[r2][jj];
+        m[r2][jj] = temp;
+    }
+
+    return;
+}
+
+void upd_UL(double** a, int n, int k, double** u, double** l){
+
+#pragma parallel for num_threads(t) 
+    for(int i = k+1; i < n; i++){ // k and n don't change, can afford to be shared variables
+        l[i][k] = a[i][k]/u[k][k];
+        u[k][i] = a[k][i];
+    }
+
+    return;
+}; 
+
+
+void upd_A(double** a, int n, int k, double** u, double** l){
+
+#pragma parallel for num_threads(t) 
+    for(int i = k+1; i < n; i++){
+        for(int j = k+1; j < n; j++){ // j is declared inside the thread - private
+            a[i][j] = a[i][j] - l[i][k]*u[k][j]; // k and n don't change, can afford to be shared variables
+        }
+    }
+
+    return;
+}; 
+
+
+/* Verification Functions */
 
 void mat_mult(double** m1, double** m2, double** m3, int n){
 #pragma parallel for num_threads(t)

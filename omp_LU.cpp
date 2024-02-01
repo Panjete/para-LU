@@ -147,12 +147,14 @@ void LU(int n, int t){
 
         // Swaps Completed. Now re-adjust l, u and a appropriately
 
+        // Updating U and L, and tracking time taken to do so
         t1 = std::chrono::high_resolution_clock::now();
         upd_UL_v2(a, n, k, u[k], l, t);
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
         t_lu += duration;
         
+        // Updating A and adding time taken to do so
         t1 = std::chrono::high_resolution_clock::now();
         upd_A_v2(a, n, k, u[k], l, t);
         t2 = std::chrono::high_resolution_clock::now();
@@ -170,11 +172,11 @@ void LU(int n, int t){
 
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
-    std::cout << "Time taken by the program: " << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << " ms" << std::endl;
-    std::cout << "Time taken for max: " << std::chrono::duration_cast<std::chrono::milliseconds>(t_max).count() << " ms" << std::endl;
-    std::cout << "Time taken for swap: " << std::chrono::duration_cast<std::chrono::milliseconds>(t_swap).count() << " ms" << std::endl;
-    std::cout << "Time taken for lu updates: " << std::chrono::duration_cast<std::chrono::milliseconds>(t_lu).count() << " ms" << std::endl;
-    std::cout << "Time taken for a updates: " << std::chrono::duration_cast<std::chrono::milliseconds>(t_a).count() << " ms" << std::endl;
+    cout << "Time taken by the program: " << chrono::duration_cast<chrono::milliseconds>(duration).count() << " ms" << endl;
+    cout << "Time taken for max: " << chrono::duration_cast<chrono::milliseconds>(t_max).count() << " ms" << endl;
+    cout << "Time taken for swap: " << chrono::duration_cast<chrono::milliseconds>(t_swap).count() << " ms" << endl;
+    cout << "Time taken for lu updates: " << chrono::duration_cast<chrono::milliseconds>(t_lu).count() << " ms" << endl;
+    cout << "Time taken for a updates: " << chrono::duration_cast<chrono::milliseconds>(t_a).count() << " ms" << endl;
 
 
     double time_taken = ((double)t_clock)/CLOCKS_PER_SEC; // in seconds 
@@ -393,7 +395,7 @@ void upd_A(double** a, int n, int k, double* u_k, double** l, int t){
 void upd_A_v2(double** a, int n, int k, double* u_k, double** l, int t){
 
     int work = n-k-1;
-    if(work == 0){return;}
+    if(work == 0){return;} // Happens when k == n-1
     if(work < t){ // Too small, simply use sequential code
         double* a_i;
         double* l_i;
@@ -413,12 +415,16 @@ void upd_A_v2(double** a, int n, int k, double* u_k, double** l, int t){
         int i_start = k+1+ my_rank * per_thread;
         int i_end   = i_start + per_thread;
         if(my_rank == t-1){i_end = n;}
-        double* a_i;
-        double* l_i;
+        double* a_exp, *u_exp;
+        double l_ik;
         for(int i = i_start; i < i_end; i++){
-            a_i = a[i]; l_i = l[i];
+            l_ik = l[i][k];
+            a_exp = &(a[i][k+1]); // works because k is guarenteed to be < n-1 
+            u_exp = &(u_k[k+1]); // works because k is guarenteed to be < n-1 
             for(int j = k+1; j < n; j++){ 
-                a_i[j] = a_i[j] - l_i[k]*u_k[j];
+                //a_i[j] -= l_ik * u_k[j];
+                *(a_exp) -= l_ik * (*u_exp);
+                a_exp++; u_exp++;
             }
         }
     }

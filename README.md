@@ -56,3 +56,58 @@ Time taken for max: 1 ms
 Time taken for swap: 3 ms
 Time taken for lu updates: 3 ms
 Time taken for a updates: 747 ms
+
+
+After identifying that l[i][k] remains constant in the inner loop, 
+
+2 threads :
+
+Initialised matrices!
+Time taken by the program: 296 ms
+Time taken for max: 2 ms
+Time taken for swap: 10 ms
+Time taken for lu updates: 7 ms
+Time taken for a updates: 273 ms
+
+4 threads : 
+
+Time taken by the program: 196 ms
+Time taken for max: 2 ms
+Time taken for swap: 17 ms
+Time taken for lu updates: 10 ms
+Time taken for a updates: 164 ms
+
+8 threads:
+
+Time taken by the program: 249 ms
+Time taken for max: 3 ms
+Time taken for swap: 39 ms
+Time taken for lu updates: 22 ms
+Time taken for a updates: 181 ms
+
+
+After using pointer increments instead of accesses; storing pointers, and incrementing them, in order to do optimised pointer calculation rather than adding j*8 to base index for every j :
+
+2 threads :
+
+Time taken by the program: 289 ms
+Time taken for max: 2 ms
+Time taken for swap: 11 ms
+Time taken for lu updates: 8 ms
+Time taken for a updates: 265 ms
+
+4 threads:
+
+Time taken by the program: 189 ms
+Time taken for max: 3 ms
+Time taken for swap: 17 ms
+Time taken for lu updates: 11 ms
+Time taken for a updates: 155 ms
+
+8 threads:
+
+Time taken by the program: 230 ms
+Time taken for max: 3 ms
+Time taken for swap: 38 ms
+Time taken for lu updates: 21 ms
+Time taken for a updates: 164 ms

@@ -3,6 +3,7 @@
 #include <math.h>
 #include <time.h>
 #include <omp.h>
+
 #include <chrono>
 #include <iostream>
 using namespace std;
@@ -41,10 +42,10 @@ void init_pa(int n, double** m1, double** m2, int t); /* Storing original A as p
 int find_max(double** a, int n, int k);
 void swap_row(double** m, int r1, int r2, int k_upto, int t); /* Swap R1 with R2, upto column k*/
 void swap_row_v2(double* m1, double* m2, int k_upto); /* Swap R1 with R2, upto column k*/
-void upd_UL(double** a, int n, int k, double** u, double** l, int t); /* Fill up the u & l matrices after the global kth iteration */
-void upd_UL_v2(double** a, int n, int k, double** u, double** l, int t); /* Fill up the u & l matrices after the global kth iteration */
-void upd_A(double** a, int n, int k, double** u, double** l, int t); /* Update a now that it's kth row has been processed */
-void upd_A_v2(double** a, int n, int k, double** u, double** l, int t); /* Update a now that it's kth row has been processed */
+void upd_UL(double** a, int n, int k, double* u_k, double** l, int t); /* Fill up the u & l matrices after the global kth iteration */
+void upd_UL_v2(double** a, int n, int k, double* u_k, double** l, int t); /* Fill up the u & l matrices after the global kth iteration */
+void upd_A(double** a, int n, int k, double* u_k, double** l, int t); /* Update a now that it's kth row has been processed */
+void upd_A_v2(double** a, int n, int k, double* u_k, double** l, int t); /* Update a now that it's kth row has been processed */
 
 /* Funtions for verification of Convergence via L2,1 norm */
 void mat_mult(double** m1, double** m2, double** m3, int n, int t); // compute L*U and save in a_prime
@@ -147,13 +148,13 @@ void LU(int n, int t){
         // Swaps Completed. Now re-adjust l, u and a appropriately
 
         t1 = std::chrono::high_resolution_clock::now();
-        upd_UL_v2(a, n, k, u, l, t);
+        upd_UL_v2(a, n, k, u[k], l, t);
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
         t_lu += duration;
         
         t1 = std::chrono::high_resolution_clock::now();
-        upd_A_v2(a, n, k, u, l, t);
+        upd_A_v2(a, n, k, u[k], l, t);
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
         t_a += duration;
@@ -179,27 +180,10 @@ void LU(int n, int t){
     double time_taken = ((double)t_clock)/CLOCKS_PER_SEC; // in seconds 
     printf("LU for n = %d took %f seconds to execute \n", n, time_taken);
 
-    // Now use permutation matrix to permute rows of A
-    mat_rearrange(pa, pi, n);
     
+    mat_rearrange(pa, pi, n); // Now use permutation matrix to permute rows of A
     mat_mult(l, u, a_prime, n, t);  // a_prime = LU
-/*
-    printf("matrix L = \n");
-    mat_print(l, n);
-
-    printf("matrix U = \n");
-    mat_print(u, n);
-
-    printf("Matrix LU  = \n");
-    mat_print(a_prime, n);
-
-    printf("Pi = \n");
-    for(int i = 0; i < n; i++){printf("pi[%d] = %d \n",i,  pi[i]);}
-*/
     mat_sub(pa, a_prime, n, t);      // pa = PA - LU
-
-    // printf("Matrix PA-LU  = \n");
-    // mat_print(pa, n);
 
     double convg_error = L2c1(pa, n);
     printf("LU Convergence error for n = %d is %f  \n", n, convg_error);
@@ -348,31 +332,34 @@ void swap_row_v2(double* m1, double* m2, int k_upto){
 }
 
 
-void upd_UL(double** a, int n, int k, double** u, double** l, int t){
+void upd_UL(double** a, int n, int k, double* u_k, double** l, int t){
 
-    double x = u[k][k];
+    double x = u_k[k];
+    double* a_k = a[k];
 #pragma omp parallel for num_threads(t) 
     for(int i = k+1; i < n; i++){ // k and n don't change, can afford to be shared variables
         l[i][k] = a[i][k]/x;
-        u[k][i] = a[k][i];
+        u_k[i] = a_k[i];
     }
 
     return;
 }; 
 
-void upd_UL_v2(double** a, int n, int k, double** u, double** l, int t){
+void upd_UL_v2(double** a, int n, int k, double* u_k, double** l, int t){
 
-    double x = u[k][k];
+    double x = u_k[k];
     int work = n-k-1;
     if(work == 0){return;}
     if(work < t){
+        double* a_k = a[k];
         for(int i = k+1; i < n; i++){ 
             l[i][k] = a[i][k]/x;
-            u[k][i] = a[k][i];
+            u_k[i] = a_k[i];
         }
         return;
     }
 
+    double* a_k = a[k];
     int per_thread = work/t;
     
 #pragma omp parallel for num_threads(t)
@@ -382,7 +369,7 @@ void upd_UL_v2(double** a, int n, int k, double** u, double** l, int t){
         if(my_rank == t-1){i_end = n;}
         for(int i = i_start; i < i_end; i++){
             l[i][k] = a[i][k]/x;
-            u[k][i] = a[k][i];
+            u_k[i] = a_k[i];
         }
     }
 
@@ -390,12 +377,12 @@ void upd_UL_v2(double** a, int n, int k, double** u, double** l, int t){
 }; 
 
 
-void upd_A(double** a, int n, int k, double** u, double** l, int t){
+void upd_A(double** a, int n, int k, double* u_k, double** l, int t){
 
 #pragma omp parallel for num_threads(t) 
     for(int i = k+1; i < n; i++){
         for(int j = k+1; j < n; j++){ // j is declared inside the thread - private
-            a[i][j] = a[i][j] - l[i][k]*u[k][j]; // k and n don't change, can afford to be shared variables
+            a[i][j] = a[i][j] - l[i][k]*u_k[j]; // k and n don't change, can afford to be shared variables
         }
     }
 
@@ -403,14 +390,17 @@ void upd_A(double** a, int n, int k, double** u, double** l, int t){
 }; 
 
 
-void upd_A_v2(double** a, int n, int k, double** u, double** l, int t){
+void upd_A_v2(double** a, int n, int k, double* u_k, double** l, int t){
 
     int work = n-k-1;
     if(work == 0){return;}
-    if(work < t){
+    if(work < t){ // Too small, simply use sequential code
+        double* a_i;
+        double* l_i;
         for(int i = k+1; i < n; i++){
+            a_i = a[i]; l_i = l[i];
             for(int j = k+1; j < n; j++){
-                a[i][j] = a[i][j] - l[i][k]*u[k][j];
+                a_i[j] = a_i[j] - l_i[k]*u_k[j];
             }
         }
         return;
@@ -423,15 +413,19 @@ void upd_A_v2(double** a, int n, int k, double** u, double** l, int t){
         int i_start = k+1+ my_rank * per_thread;
         int i_end   = i_start + per_thread;
         if(my_rank == t-1){i_end = n;}
+        double* a_i;
+        double* l_i;
         for(int i = i_start; i < i_end; i++){
+            a_i = a[i]; l_i = l[i];
             for(int j = k+1; j < n; j++){ 
-                a[i][j] = a[i][j] - l[i][k]*u[k][j];
+                a_i[j] = a_i[j] - l_i[k]*u_k[j];
             }
         }
     }
 
     return;
 }; 
+ 
 
 /* Verification Functions */
 
@@ -502,6 +496,6 @@ Gurarmaan
 
 Execute using command
 
-clang -Xclang -fopenmp -L/opt/homebrew/opt/libomp/lib -I/opt/homebrew/opt/libomp/include -lomp omp_LU.c -o exec2.out
+clang++ -std=c++11 -Xclang -fopenmp -L/opt/homebrew/opt/libomp/lib -I/opt/homebrew/opt/libomp/include -lomp omp_LU.cpp -o exec2.out
 
 */

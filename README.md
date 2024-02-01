@@ -9,13 +9,20 @@ Implementation of parallel algorithms for Gaussian elimination to factor a dense
 `seq_LU.c` - is where a clean, commented, sequential version of the LU Decomposer is kept to serve as a reference and a baseline for comparison. Also prints `exec_time` and  `L2,1` norm of the residual array to aid in performance analysis.
 
 
-On 1/2/24, after meeting, the Times after shifting to cpp are :
+On 1/2/24, after meeting, the Times after shifting to cpp are, 2 threads :
 
 Time taken by the program: 592 ms
 Time taken for max: 1 ms
 Time taken for swap: 10 ms
 Time taken for lu updates: 7 ms
 Time taken for a updates: 569 ms
+
+Sequential times : 
+Time taken by the program: 840 ms
+Time taken for max: 1 ms
+Time taken for swap: 3 ms
+Time taken for lu updates: 3 ms
+Time taken for a updates: 829 ms
 
 
 After converting u[k][j] -> u_k[j], for 2 threads:
@@ -42,3 +49,10 @@ Time taken for swap: 40 ms
 Time taken for lu updates: 23 ms
 Time taken for a updates: 224 ms
 
+Seq time :
+
+Time taken by the program: 757 ms
+Time taken for max: 1 ms
+Time taken for swap: 3 ms
+Time taken for lu updates: 3 ms
+Time taken for a updates: 747 ms

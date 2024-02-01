@@ -40,7 +40,7 @@ void init_pa(int n, double** m1, double** m2, int t); /* Storing original A as p
 
 /* LU Decomposer Modules */
 int find_max(double** a, int n, int k);
-void swap_row(double** m, int r1, int r2, int k_upto, int t); /* Swap R1 with R2, upto column k*/
+void swap_row(double* m1, double* m2, int k_upto, int t); /* Swap R1 with R2, upto column k*/
 void swap_row_v2(double* m1, double* m2, int k_upto); /* Swap R1 with R2, upto column k*/
 void upd_UL(double** a, int n, int k, double* u_k, double** l, int t); /* Fill up the u & l matrices after the global kth iteration */
 void upd_UL_v2(double** a, int n, int k, double* u_k, double** l, int t); /* Fill up the u & l matrices after the global kth iteration */
@@ -129,8 +129,8 @@ void LU(int n, int t){
         
         t1 = std::chrono::high_resolution_clock::now();
         SWAP(int, pi[k], pi[k_prime]);
-        //swap_row(a, k, k_prime, n, t);
-        //swap_row(l, k, k_prime, k, t);
+        //swap_row(a[k], a[k_prime], n, t);
+        //swap_row(l[k], l[k_prime], k, t);
         #pragma omp parallel num_threads(t)
         {
                 swap_row_v2(a[k], a[k_prime], n);
@@ -300,13 +300,13 @@ int find_max(double** a, int n, int k){
     return k_prime;
 }
 
-void swap_row(double** m, int r1, int r2, int k_upto, int t){
+void swap_row(double* m1, double* m2, int k_upto, int t){
     
 #pragma omp parallel for num_threads(t) 
     for(int jj = 0; jj < k_upto; jj++){
-        double temp = m[r1][jj];
-        m[r1][jj] = m[r2][jj];
-        m[r2][jj] = temp;
+        double temp = m1[jj];
+        m1[jj] = m2[jj];
+        m1[jj] = temp;
     }
 
     return;
@@ -496,6 +496,6 @@ Gurarmaan
 
 Execute using command
 
-clang++ -std=c++11 -Xclang -fopenmp -L/opt/homebrew/opt/libomp/lib -I/opt/homebrew/opt/libomp/include -lomp omp_LU.cpp -o exec2.out
+clang++ -std=c++11 -Xclang -fopenmp -L/opt/homebrew/opt/libomp/lib -I/opt/homebrew/opt/libomp/include -lomp omp_LU.cpp -o exec3.out
 
 */

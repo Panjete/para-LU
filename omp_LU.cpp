@@ -3,6 +3,9 @@
 #include <math.h>
 #include <time.h>
 #include <omp.h>
+#include <chrono>
+#include <iostream>
+using namespace std;
 
 #define SWAP(T, a, b) do {T tmp = a; a = b; b = tmp; } while (0)
 
@@ -99,36 +102,61 @@ void LU(int n, int t){
     clock_t t_clock; 
     t_clock = clock(); 
     printf("Initialised matrices!\n");
+
+    std::chrono::microseconds t_max(0);
+    std::chrono::microseconds t_swap(0);
+    std::chrono::microseconds t_lu(0);
+    std::chrono::microseconds t_a(0);
+
+    auto start = std::chrono::high_resolution_clock::now();
+
     // k is the column here
     for(int k = 0; k < n; k++){  
 
+        auto t1 = std::chrono::high_resolution_clock::now();
         int k_prime = find_max(a, n, k); // Find the pivot
-        
+        auto t2 = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
+        t_max += duration;
+
         if(k_prime == -1){ //Happens when all elements in this column == 0
             printf("Error : Singular Matrix");
             return;
         }
 
         // Now that pivot has been discovered, start swapping
-
+        
+        t1 = std::chrono::high_resolution_clock::now();
         SWAP(int, pi[k], pi[k_prime]);
         //swap_row(a, k, k_prime, n, t);
         //swap_row(l, k, k_prime, k, t);
-#pragma omp parallel num_threads(t)
-{
-        swap_row_v2(a[k], a[k_prime], n);
-}
-#pragma omp parallel num_threads(t)
-{
-        swap_row_v2(l[k], l[k_prime], k);
-}
+        #pragma omp parallel num_threads(t)
+        {
+                swap_row_v2(a[k], a[k_prime], n);
+        }
+        #pragma omp parallel num_threads(t)
+        {
+                swap_row_v2(l[k], l[k_prime], k);
+        }
+        t2 = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
+        t_swap += duration;
 
         u[k][k] = a[k][k];
 
         // Swaps Completed. Now re-adjust l, u and a appropriately
 
+        t1 = std::chrono::high_resolution_clock::now();
         upd_UL_v2(a, n, k, u, l, t);
+        t2 = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
+        t_lu += duration;
+        
+        t1 = std::chrono::high_resolution_clock::now();
         upd_A_v2(a, n, k, u, l, t);
+        t2 = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
+        t_a += duration;
 
         // Complete for the this iteration of k
     }
@@ -136,6 +164,18 @@ void LU(int n, int t){
     // LU Computed. Now testing for time, and L2,1 convergence.
 
     t_clock = clock() - t_clock; 
+
+    auto stop = std::chrono::high_resolution_clock::now();
+
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+
+    std::cout << "Time taken by the program: " << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << " ms" << std::endl;
+    std::cout << "Time taken for max: " << std::chrono::duration_cast<std::chrono::milliseconds>(t_max).count() << " ms" << std::endl;
+    std::cout << "Time taken for swap: " << std::chrono::duration_cast<std::chrono::milliseconds>(t_swap).count() << " ms" << std::endl;
+    std::cout << "Time taken for lu updates: " << std::chrono::duration_cast<std::chrono::milliseconds>(t_lu).count() << " ms" << std::endl;
+    std::cout << "Time taken for a updates: " << std::chrono::duration_cast<std::chrono::milliseconds>(t_a).count() << " ms" << std::endl;
+
+
     double time_taken = ((double)t_clock)/CLOCKS_PER_SEC; // in seconds 
     printf("LU for n = %d took %f seconds to execute \n", n, time_taken);
 

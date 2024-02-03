@@ -46,6 +46,8 @@ void upd_UL(double** a, int n, int k, double* u_k, double** l, int t); /* Fill u
 void upd_UL_v2(double** a, int n, int k, double* u_k, double** l, int t); /* Fill up the u & l matrices after the global kth iteration */
 void upd_A(double** a, int n, int k, double* u_k, double** l, int t); /* Update a now that it's kth row has been processed */
 void upd_A_v2(double** a, int n, int k, double* u_k, double** l, int t); /* Update a now that it's kth row has been processed */
+void upd_A_seq(double** a, int n, int k, double* u_k, double** l, int t); /* Update a now that it's kth row has been processed */
+void upd_A_v3(double** a, int n, int k, double* u_k, double** l, int t); /* Update a now that it's kth row has been processed */
 
 /* Funtions for verification of Convergence via L2,1 norm */
 void mat_mult(double** m1, double** m2, double** m3, int n, int t); // compute L*U and save in a_prime
@@ -131,14 +133,14 @@ void LU(int n, int t){
         SWAP(int, pi[k], pi[k_prime]);
         //swap_row(a[k], a[k_prime], n, t);
         //swap_row(l[k], l[k_prime], k, t);
-        #pragma omp parallel num_threads(t)
-        {
+#pragma omp parallel num_threads(t)
+{
                 swap_row_v2(a[k], a[k_prime], n);
-        }
-        #pragma omp parallel num_threads(t)
-        {
+}
+#pragma omp parallel num_threads(t)
+{
                 swap_row_v2(l[k], l[k_prime], k);
-        }
+}
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
         t_swap += duration;
@@ -156,7 +158,15 @@ void LU(int n, int t){
         
         // Updating A and adding time taken to do so
         t1 = std::chrono::high_resolution_clock::now();
-        upd_A_v2(a, n, k, u[k], l, t);
+        if(n-k < t){upd_A_seq(a, n, k, u[k], l, t);} // Too small a workload to parallelise
+        else{
+#pragma omp parallel num_threads(t)
+{
+            upd_A_v3(a, n, k, u[k], l, t);
+}
+        
+            }
+
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
         t_a += duration;
@@ -430,7 +440,40 @@ void upd_A_v2(double** a, int n, int k, double* u_k, double** l, int t){
     }
 
     return;
-}; 
+};
+
+void upd_A_seq(double** a, int n, int k, double* u_k, double** l, int t){
+    for(int i = k+1; i < n; i++){
+        for(int j = k+1; j < n; j++){ // j is declared inside the thread - private
+            a[i][j] = a[i][j] - l[i][k]*u_k[j]; // k and n don't change, can afford to be shared variables
+        }
+    }
+
+    return;
+}
+
+
+void upd_A_v3(double** a, int n, int k, double* u_k, double** l, int t){
+    k++; // Incremented because most of the time we were using k+1 anyways
+    int per_thread = (n-k)/omp_get_num_threads();
+    int i_start = k +  omp_get_thread_num() * per_thread; // my_rank == omp_get_thread_num();
+    if(omp_get_thread_num() == omp_get_num_threads()-1){per_thread = n-i_start;}
+
+    double* a_exp, *u_exp = &(u_k[k]), *u_exp_init = &(u_k[k]); // works because k is guarenteed to be < n-1 
+    double l_ik;
+    for(int i = i_start; i < i_start + per_thread; i++){
+        l_ik = l[i][k-1];
+        a_exp = &(a[i][k]); // works because k is guarenteed to be < n-1 
+        for(int j = k; j < n; j++){ 
+            *(a_exp) -= l_ik * (*u_exp);
+            a_exp++; u_exp++;
+        }
+        u_exp = u_exp_init;
+        
+    }
+
+    return;
+};
  
 
 /* Verification Functions */
@@ -502,6 +545,6 @@ Gurarmaan
 
 Execute using command
 
-clang++ -std=c++11 -Xclang -fopenmp -L/opt/homebrew/opt/libomp/lib -I/opt/homebrew/opt/libomp/include -lomp omp_LU.cpp -o exec3.out
+clang++ -std=c++11 -Xclang -fopenmp -L/opt/homebrew/opt/libomp/lib -I/opt/homebrew/opt/libomp/include -lomp omp_LU.cpp -o exec2.out
 
 */

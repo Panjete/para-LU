@@ -8,6 +8,11 @@ Implementation of parallel algorithms for Gaussian elimination to factor a dense
 
 `seq_LU.c` - is where a clean, commented, sequential version of the LU Decomposer is kept to serve as a reference and a baseline for comparison. Also prints `exec_time` and  `L2,1` norm of the residual array to aid in performance analysis.
 
+To work on :
+
+- Time taken on swaps somehow increases in the parallel OpenMP implementation
+- Focus on reducing time in the update_A step
+
 
 On 1/2/24, after meeting, the Times after shifting to cpp are, 2 threads :
 
@@ -111,3 +116,29 @@ Time taken for max: 3 ms
 Time taken for swap: 38 ms
 Time taken for lu updates: 21 ms
 Time taken for a updates: 164 ms
+
+Using upd_A_v3 instead, and using seq code if k too low :
+
+2 threads :
+
+Time taken by the program: 261 ms
+Time taken for max: 1 ms
+Time taken for swap: 9 ms
+Time taken for lu updates: 7 ms
+Time taken for a updates: 240 ms
+
+4 threads:
+
+Time taken by the program: 182 ms
+Time taken for max: 2 ms
+Time taken for swap: 17 ms
+Time taken for lu updates: 11 ms
+Time taken for a updates: 147 ms
+
+8 threads:
+
+Time taken by the program: 217 ms
+Time taken for max: 2 ms
+Time taken for swap: 37 ms
+Time taken for lu updates: 21 ms
+Time taken for a updates: 153 ms

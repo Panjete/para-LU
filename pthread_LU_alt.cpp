@@ -45,6 +45,7 @@ int* pi;
 int k; //used in the major for loop
 double gmax = 0.0;
 int k_prime; //used in the interchange
+pthread_barrier_t barrier; 
 
 int main(int argc, char* argv[]) {
 
@@ -58,18 +59,218 @@ int main(int argc, char* argv[]) {
     LU(n, total_threads); // Pass control to the LU-decomposer
 
     return 0;
-}   
+}  
+
+void* full(void* rank) {
+
+    int t = *((int*)rank);
+    int total_i = n - k;
+    int i_d = total_i/total_threads;
+    int i_r = total_i % total_threads;
+
+    int first_i, last_i;
+    if (t < i_r)
+        first_i = (i_d*t) + t;
+    else
+        first_i = (i_d*t) + i_r;
+
+    if (t+1 < i_r)
+        last_i = (i_d * (t+1)) + t+1;
+    else
+        last_i = (i_d * (t+1)) + i_r;
+
+
+    double my_max = 0;
+    int my_k_prime = -1;
+    for (int j = k+first_i; j < k+last_i; j++) {
+        double a_jk = fabs(a[j][k]);
+        if (my_max < a_jk) {
+            my_max = a_jk;
+            my_k_prime = j;
+        }
+    }
+
+    pthread_mutex_lock(&mutex); // how to specify where the lock has been put?
+    if (my_max > gmax) {
+        gmax = my_max;
+        k_prime = my_k_prime;
+    }
+    pthread_mutex_unlock(&mutex);
+
+    pthread_barrier_wait(&barrier);
+
+    if (t == 0) {
+        if (gmax == 0.0) {
+            printf("Error: Singular Matrix");
+            return 0;
+        }
+        SWAP(int, pi[k], pi[k_prime]);
+    }
+
+    // Now that pivot has been discovered, start swapping
+    // t1 = std::chrono::high_resolution_clock::now();
+    // Below not parallelised
+    // if (t == 1%total_threads) {
+        // SWAP(int, pi[k], pi[k_prime]);
+        // for(int jj = 0; jj < n; jj++){
+            // SWAP(double, a[k][jj], a[k_prime][jj]);
+        // }
+        // for(int jj = 0; jj < k; jj++){
+            // SWAP(double, l[k][jj], l[k_prime][jj]);
+        // }
+        // u[k][k] = a[k][k];
+    // }
+
+    // t = *((int*)rank);
+    // if (t == 0) {
+    // }
+
+    int j_d = n/total_threads;
+    int j_r = n % total_threads;
+
+    int first_j, last_j;
+    if (t < j_r)
+        first_j = (j_d*t) + t;
+    else
+        first_j = (j_d*t) + j_r;
+
+    if (t+1 < j_r)
+        last_j = (j_d * (t+1)) + t+1;
+    else
+        last_j = (j_d * (t+1)) + j_r;
+
+    for (int jj = first_j; jj < last_j; jj++) {
+        SWAP(double, a[k][jj], a[k_prime][jj]);
+    }
+
+    /* -------------------------- */
+
+    j_d = k/total_threads;
+    j_r = k % total_threads;
+
+    if (t < j_r)
+        first_j = (j_d*t) + t;
+    else
+        first_j = (j_d*t) + j_r;
+
+    if (t+1 < j_r)
+        last_j = (j_d * (t+1)) + t+1;
+    else
+        last_j = (j_d * (t+1)) + j_r;
+
+    for (int jj = first_j; jj < last_j; jj++) {
+        SWAP(double, l[k][jj], l[k_prime][jj]);
+    }
+
+    pthread_barrier_wait(&barrier);
+
+    if (t == 0) {
+        u[k][k] = a[k][k];
+    }
+
+    pthread_barrier_wait(&barrier);
+
+    // t2 = std::chrono::high_resolution_clock::now();
+    // duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
+    // t_swap += duration;
+
+
+    // Swaps Completed. Now re-adjust l and u appropriately
+
+    //sequential lu setting implementation
+    
+    // for(int i = k+1; i < n; i++){
+    //     l[i][k] = a[i][k]/u[k][k];
+    //     u[k][i] = a[k][i];
+    // }
+    
+    // t1 = std::chrono::high_resolution_clock::now();
+    //parallel lu setting implementation
+    // for(int i = k+1; i < n; i++){
+    //     for(int j = k+1; j < n; j++){
+    //         a[i][j] = a[i][j] - l[i][k]*u[k][j];
+    //     }
+    // }
+        
+    t = *((int*)rank);
+    total_i = n - k - 1;
+    i_d = total_i/total_threads;
+    i_r = total_i % total_threads;
+
+    if (t < i_r)
+        first_i = (i_d*t) + t;
+    else
+        first_i = (i_d*t) + i_r;
+
+    if (t+1 < i_r)
+        last_i = (i_d * (t+1)) + t+1;
+    else
+        last_i = (i_d * (t+1)) + i_r;
+
+    double u_kk = u[k][k];
+    double *a_k = a[k];
+    double *u_k = u[k];
+    for (int j = k+1+first_i; j < k+1+last_i; j++) {
+        l[j][k] = a[j][k]/u_kk;
+        u_k[j] = a_k[j];
+    }
+
+    pthread_barrier_wait(&barrier);
+
+    // t2 = std::chrono::high_resolution_clock::now();
+    // duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
+    // t_lu += duration;
+
+    //sequential a setting implementation
+    
+    
+    // t1 = std::chrono::high_resolution_clock::now();
+    //parallel a setting implementation
+    
+    t = *((int*)rank);
+    total_i = n - k - 1;
+    i_d = total_i/total_threads;
+    i_r = total_i % total_threads;
+
+    if (t < i_r)
+        first_i = (i_d*t) + t;
+    else
+        first_i = (i_d*t) + i_r;
+
+    if (t+1 < i_r)
+        last_i = (i_d * (t+1)) + t+1;
+    else
+        last_i = (i_d * (t+1)) + i_r;
+
+    double l_ik;
+    double *a_i;
+    u_k = u[k];
+    for (int i = k+1+first_i; i < k+1+last_i; i++) {
+        l_ik = l[i][k];
+        a_i = a[i];
+        for (int j = k+1; j < n; j++) {
+            a_i[j] = a_i[j] - l_ik*u_k[j];
+        }
+    }
+
+}
 
 void LU(int n, int thread_count){
     pthread_t* thread_handles; //creating thread handles, ig can be reused all throughout
     // thread_handles = (pthread_t*) malloc(thread_count*sizeof(pthread_t));
+    pthread_barrier_init(&barrier,NULL,thread_count);
+
     thread_handles = new pthread_t[thread_count];
     int thread_ids[thread_count];
     for (int i = 0; i < thread_count; i++) {
         thread_ids[i] = i;
     }
 
-    //double *a[n], *l[n], *u[n], *pa[n], *a_prime[n]; // Pointers to the matrice's rows
+    //double *a[n]     //sequential lu setting implementation
+        
+        // for(int i = k+1; i < n; i++){
+        //     l[i][k] = a[i][k]/u[k][k];
+        //     u[k, *l[n], *u[n], *pa[n], *a_prime[n]; // Pointers to the matrice's rows
     //int pi[n];
     /* Here, the vector pi is a compact representation of a permutation matrix p(n,n), 
        which is very sparse. For the ith row of p, pi(i) stores the column index of
@@ -110,98 +311,15 @@ void LU(int n, int thread_count){
 
     // k is the column here
     for(k = 0; k < n; k++){  
-        // Might Confuse indexing    return;
 
-        // Remember we shifted from 1 indexing in pseudo-code to 0-indexing here
-
-        //double gmax = 0;
-        //int k_prime; // store the row(i) with the gmax value (pivot) in this column (k)
-
-        // sequential gmax implementation
         gmax = 0.0;
-        
-        
-        // paralle gmax implementation
-        // gmax = 0;
         int thread;
-        auto t1 = std::chrono::high_resolution_clock::now();
-        for(int i = k ; i < n; i++){
-            if (gmax < fabs(a[i][k])){
-                gmax = fabs(a[i][k]);
-                k_prime = i;
-            }
-        }
-        // for (thread = 0; thread < thread_count; thread++)
-        //     pthread_create(&thread_handles[thread], NULL, thread_max, (void*)&thread_ids[thread]);
-        // for (thread = 0; thread < thread_count; thread++)
-        //     pthread_join(thread_handles[thread], NULL);
-        auto t2 = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
-        t_max += duration;
 
-        
-        if (gmax == 0.0) {
-            printf("Error: Singular Matrix");
-            return;
-        }
-
-
-        // Now that pivot has been discovered, start swapping
-        t1 = std::chrono::high_resolution_clock::now();
-        // Below not parallelised
-        SWAP(int, pi[k], pi[k_prime]);
-        for(int jj = 0; jj < n; jj++){
-            SWAP(double, a[k][jj], a[k_prime][jj]);
-        }
-        for(int jj = 0; jj < k; jj++){
-            SWAP(double, l[k][jj], l[k_prime][jj]);
-        }
-        u[k][k] = a[k][k];
-        t2 = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
-        t_swap += duration;
-
-
-        // Swaps Completed. Now re-adjust l and u appropriately
-
-        //sequential lu setting implementation
-        
-        // for(int i = k+1; i < n; i++){
-        //     l[i][k] = a[i][k]/u[k][k];
-        //     u[k][i] = a[k][i];
-        // }
-        
-        t1 = std::chrono::high_resolution_clock::now();
-        //parallel lu setting implementation
-        // for(int i = k+1; i < n; i++){
-        //     for(int j = k+1; j < n; j++){
-        //         a[i][j] = a[i][j] - l[i][k]*u[k][j];
-        //     }
-        // }
-        
         for (thread = 0; thread < thread_count; thread++)
-            pthread_create(&thread_handles[thread], NULL, thread_lu_set, (void*)&thread_ids[thread]);
+            pthread_create(&thread_handles[thread], NULL, full, (void*)&thread_ids[thread]);
         for (thread = 0; thread < thread_count; thread++)
             pthread_join(thread_handles[thread], NULL);
-        t2 = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
-        t_lu += duration;
 
-        //sequential a setting implementation
-        
-        
-        t1 = std::chrono::high_resolution_clock::now();
-        //parallel a setting implementation
-        
-        for (thread = 0; thread < thread_count; thread++)
-            pthread_create(&thread_handles[thread], NULL, thread_a_set, (void*)&thread_ids[thread]);
-        for (thread = 0; thread < thread_count; thread++)
-            pthread_join(thread_handles[thread], NULL);
-        t2 = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
-        t_a += duration;
-
-        // Complete for the this iteration of k
     }
 
     pthread_mutex_destroy(&mutex);

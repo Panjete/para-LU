@@ -3,7 +3,7 @@
 #include <math.h>
 #include <time.h>
 #include <omp.h>
-
+#include <cstring>
 #include <chrono>
 #include <iostream>
 using namespace std;
@@ -17,15 +17,10 @@ Components parallelised :-
 1) "parallel for" for setting pointer storing arrays of size n
 2) "parallel" at init_a/l/u of size n^2, n^2 and n^2 respectively
 3) "parallel for" at init_pa of size n^2, which does copying of A
-
-
 4) "parallel for" at swapping rows of a and l
 5) "parallel for" at updating u, l and a
 
-
-
 To do : Test for n=8000 - too big, currently does not scale well enough
-
 
 */
 
@@ -87,24 +82,25 @@ void LU(int n, int t){
         a_prime[i] = (double*)malloc(n * sizeof(double));
     }
 
-#pragma omp parallel num_threads(t)
-{
-    init_a(n, a);
-}
-#pragma omp parallel num_threads(t)
-{
-    init_l(n, l);
-}
-#pragma omp parallel num_threads(t)
-{
-    init_u(n, u);
-}
+    #pragma omp parallel num_threads(t)
+    {
+        init_a(n, a);
+    }
+    #pragma omp parallel num_threads(t)
+    {
+        init_l(n, l);
+    }
+    #pragma omp parallel num_threads(t)
+    {
+        init_u(n, u);
+    }
+
     init_pi(n, pi, t);    // Internally Parallelised
     init_pa(n, a, pa, t); // Internally Parallelised
-
-    clock_t t_clock; 
-    t_clock = clock(); 
     printf("Initialised matrices!\n");
+
+    // Swap area for memcpy
+    double* swp = (double*)malloc(n * sizeof(double));
 
     std::chrono::microseconds t_max(0);
     std::chrono::microseconds t_swap(0);
@@ -112,10 +108,8 @@ void LU(int n, int t){
     std::chrono::microseconds t_a(0);
 
     auto start = std::chrono::high_resolution_clock::now();
-
     // k is the column here
     for(int k = 0; k < n; k++){  
-
         auto t1 = std::chrono::high_resolution_clock::now();
         int k_prime = find_max(a, n, k); // Find the pivot
         auto t2 = std::chrono::high_resolution_clock::now();
@@ -128,19 +122,20 @@ void LU(int n, int t){
         }
 
         // Now that pivot has been discovered, start swapping
-        
         t1 = std::chrono::high_resolution_clock::now();
         SWAP(int, pi[k], pi[k_prime]);
-        //swap_row(a[k], a[k_prime], n, t);
-        //swap_row(l[k], l[k_prime], k, t);
-#pragma omp parallel num_threads(t)
-{
-                swap_row_v2(a[k], a[k_prime], n);
-}
-#pragma omp parallel num_threads(t)
-{
-                swap_row_v2(l[k], l[k_prime], k);
-}
+
+        // Swap rows of A
+        double* temp = a[k];
+        a[k] = a[k_prime];
+        a[k_prime] = temp;
+
+        // Swap rows of l
+        memcpy(swp, l[k], sizeof(double) * k);
+        memcpy(l[k], l[k_prime], sizeof(double) * k);
+        memcpy(l[k_prime], swp, sizeof(double) * k);
+        u[k][k] = a[k][k];
+
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
         t_swap += duration;
@@ -148,7 +143,6 @@ void LU(int n, int t){
         u[k][k] = a[k][k];
 
         // Swaps Completed. Now re-adjust l, u and a appropriately
-
         // Updating U and L, and tracking time taken to do so
         t1 = std::chrono::high_resolution_clock::now();
         upd_UL_v2(a, n, k, u[k], l, t);
@@ -158,14 +152,15 @@ void LU(int n, int t){
         
         // Updating A and adding time taken to do so
         t1 = std::chrono::high_resolution_clock::now();
-        if(n-k < t){upd_A_seq(a, n, k, u[k], l, t);} // Too small a workload to parallelise
+        if(n-k < t){
+            upd_A_seq(a, n, k, u[k], l, t); // Too small a workload to parallelise
+        } 
         else{
-#pragma omp parallel num_threads(t)
-{
-            upd_A_v3(a, n, k, u[k], l, t);
-}
-        
+            #pragma omp parallel num_threads(t)
+            {
+                upd_A_v3(a, n, k, u[k], l, t);
             }
+        }
 
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
@@ -175,8 +170,6 @@ void LU(int n, int t){
     }
 
     // LU Computed. Now testing for time, and L2,1 convergence.
-
-    t_clock = clock() - t_clock; 
 
     auto stop = std::chrono::high_resolution_clock::now();
 
@@ -188,18 +181,12 @@ void LU(int n, int t){
     cout << "Time taken for lu updates: " << chrono::duration_cast<chrono::milliseconds>(t_lu).count() << " ms" << endl;
     cout << "Time taken for a updates: " << chrono::duration_cast<chrono::milliseconds>(t_a).count() << " ms" << endl;
 
-
-    double time_taken = ((double)t_clock)/CLOCKS_PER_SEC; // in seconds 
-    printf("LU for n = %d took %f seconds to execute \n", n, time_taken);
-
-    
     mat_rearrange(pa, pi, n); // Now use permutation matrix to permute rows of A
     mat_mult(l, u, a_prime, n, t);  // a_prime = LU
     mat_sub(pa, a_prime, n, t);      // pa = PA - LU
 
     double convg_error = L2c1(pa, n);
     printf("LU Convergence error for n = %d is %f  \n", n, convg_error);
-
 
     // Freeing space
     for(int i = 0; i < n; i++){

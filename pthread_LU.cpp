@@ -4,6 +4,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <chrono>
+#include <cstring>
 #include <iostream>
 using namespace std;
 
@@ -94,6 +95,8 @@ void LU(int n, int thread_count){
     init_pa(n, a, pa);
 
     printf("Matrices Initalised.\n");
+
+    double* swp = new double[n];
     
     //printf("Matrix A at the start = \n");
     //mat_print(a, n);
@@ -110,16 +113,8 @@ void LU(int n, int thread_count){
 
     // k is the column here
     for(k = 0; k < n; k++){  
-        // Might Confuse indexing    return;
-
-        // Remember we shifted from 1 indexing in pseudo-code to 0-indexing here
-
-        //double gmax = 0;
-        //int k_prime; // store the row(i) with the gmax value (pivot) in this column (k)
-
         // sequential gmax implementation
         gmax = 0.0;
-        
         
         // paralle gmax implementation
         // gmax = 0;
@@ -145,40 +140,26 @@ void LU(int n, int thread_count){
             return;
         }
 
-
         // Now that pivot has been discovered, start swapping
         t1 = std::chrono::high_resolution_clock::now();
         // Below not parallelised
         SWAP(int, pi[k], pi[k_prime]);
-        for(int jj = 0; jj < n; jj++){
-            SWAP(double, a[k][jj], a[k_prime][jj]);
-        }
-        for(int jj = 0; jj < k; jj++){
-            SWAP(double, l[k][jj], l[k_prime][jj]);
-        }
+        double* temp = a[k];
+        a[k] = a[k_prime];
+        a[k_prime] = temp;
+
+        // Swap rows of l
+        memcpy(swp, l[k], sizeof(double) * k);
+        memcpy(l[k], l[k_prime], sizeof(double) * k);
+        memcpy(l[k_prime], swp, sizeof(double) * k);
         u[k][k] = a[k][k];
+
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
         t_swap += duration;
-
-
-        // Swaps Completed. Now re-adjust l and u appropriately
-
-        //sequential lu setting implementation
-        
-        // for(int i = k+1; i < n; i++){
-        //     l[i][k] = a[i][k]/u[k][k];
-        //     u[k][i] = a[k][i];
-        // }
         
         t1 = std::chrono::high_resolution_clock::now();
-        //parallel lu setting implementation
-        // for(int i = k+1; i < n; i++){
-        //     for(int j = k+1; j < n; j++){
-        //         a[i][j] = a[i][j] - l[i][k]*u[k][j];
-        //     }
-        // }
-        
+
         for (thread = 0; thread < thread_count; thread++)
             pthread_create(&thread_handles[thread], NULL, thread_lu_set, (void*)&thread_ids[thread]);
         for (thread = 0; thread < thread_count; thread++)
@@ -188,7 +169,6 @@ void LU(int n, int thread_count){
         t_lu += duration;
 
         //sequential a setting implementation
-        
         
         t1 = std::chrono::high_resolution_clock::now();
         //parallel a setting implementation
@@ -221,25 +201,8 @@ void LU(int n, int thread_count){
 
     // Now use permutation matrix to permute rows of A
     mat_rearrange(pa, pi, n);
-
     mat_mult(l, u, a_prime, n);  // a_prime = LU
-
-    //printf("matrix L = \n");
-    //mat_print(l, n);
-
-    //printf("matrix U = \n");
-    //mat_print(u, n);
-
-    //printf("Matrix LU  = \n");
-    //mat_print(a_prime, n);
-
-    //printf("Pi = \n");
-    //for(int i = 0; i < n; i++){printf("pi[%d] = %d \n",i,  pi[i]);}
-
     mat_sub(pa, a_prime, n);      // pa = PA - LU
-
-    //printf("Matrix PA-LU  = \n");
-   // mat_print(pa, n);
 
     double convg_error = L2c1(pa, n);
     printf("LU Convergence error for n = %d is %f  \n", n, convg_error);

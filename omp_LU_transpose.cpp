@@ -117,19 +117,29 @@ void LU(int n, int t){
 
     /* Transpose all the matrices here */
     double* a_t[n], *l_t[n], *u_t[n];
-    for(int i = 0; i < n; i++){
-        a_t[i] = (double*)malloc(n * sizeof(double));
-        l_t[i] = (double*)malloc(n * sizeof(double));
-        u_t[i] = (double*)malloc(n * sizeof(double));
-    }
-    for(int i = 0; i < n; i++){
-        for(int j = 0; j < n; j++){
-            a_t[i][j] = a[j][i];
-            l_t[i][j] = l[j][i];
-            u_t[i][j] = u[j][i];
+
+    if (TRANSPOSE) {
+        for(int i = 0; i < n; i++){
+            a_t[i] = (double*)malloc(n * sizeof(double));
+            l_t[i] = (double*)malloc(n * sizeof(double));
+            u_t[i] = (double*)malloc(n * sizeof(double));
+        }
+        for(int i = 0; i < n; i++){
+            for(int j = 0; j < n; j++){
+                a_t[i][j] = a[j][i];
+                l_t[i][j] = l[j][i];
+                u_t[i][j] = u[i][j];
+            }
         }
     }
 
+    /* Print the matrix */
+    // for(int i = 0; i < n; i++) {
+    //     for(int j = 0; j < n; j++) {
+    //         cout << "A" << i << " " << j << " = " << a_t[i][j] << endl;
+    //     }
+    // }
+    
     auto start = std::chrono::high_resolution_clock::now();
     // k is the column here
     for(int k = 0; k < n; k++){  
@@ -138,7 +148,7 @@ void LU(int n, int t){
         if (TRANSPOSE){
             k_prime = find_max_t(a_t, n, k);
         } else {
-            int k_prime = find_max(a, n, k); // Find the pivot
+            k_prime = find_max(a, n, k); // Find the pivot
         }
         auto t2 = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
@@ -180,8 +190,12 @@ void LU(int n, int t){
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1);
         t_swap += duration;
-
-        u[k][k] = a[k][k];
+        
+        if (TRANSPOSE) {
+            u_t[k][k] = a_t[k][k];
+        } else {
+            u[k][k] = a[k][k];
+        }
 
         // Swaps Completed. Now re-adjust l, u and a appropriately
         // Updating U and L, and tracking time taken to do so
@@ -200,12 +214,8 @@ void LU(int n, int t){
         if (TRANSPOSE) {
             if(n-k < t){
                 upd_A_seq_v4(a_t, n, k, u_t, l_t, t); // Too small a workload to parallelise
-            } 
-            else{
-                #pragma omp parallel num_threads(t)
-                {
-                    upd_A_v4(a_t, n, k, u_t, l_t, t);
-                }
+            } else {
+                upd_A_v4(a_t, n, k, u_t, l_t, t);
             }
         } else {
             if(n-k < t){
@@ -225,13 +235,15 @@ void LU(int n, int t){
 
         // Complete for the this iteration of k
     }
-
-    // Take the transpose and copy back a_t, l_t, u_t to a, l, u 
-    for(int i = 0; i < n; i++){
-        for(int j = 0; j < n; j++){
-            a[i][j] = a_t[j][i];
-            l[i][j] = l_t[j][i];
-            u[i][j] = u_t[j][i];
+    
+    if (TRANSPOSE){
+        // Take the transpose and copy back a_t, l_t, u_t to a, l, u 
+        for(int i = 0; i < n; i++){
+            for(int j = 0; j < n; j++){
+                a[i][j] = a_t[j][i];
+                l[i][j] = l_t[j][i];
+                u[i][j] = u_t[i][j];
+            }
         }
     }
 
@@ -547,25 +559,70 @@ int find_max_t(double** a, int n, int k) {
 }
 
 void upd_A_seq_v4(double** a, int n, int k, double** u, double** l, int t) {
+    double *u_k = u[k];
+    for(int i = k+1; i < n; i++){
+        for(int j = k+1; j < n; j++){ // j is declared inside the thread - private
+            a[j][i] = a[j][i] - l[k][i]*u_k[j]; // k and n don't change, can afford to be shared variables
+        }
+    }
+
+    return;
 
 }
 
 
 void upd_UL_v4(double** a, int n, int k, double** u, double** l, int t){
-    // VIRAJ WAS HERE
     double x = u[k][k];
+    // cout << x << endl;
+    double *u_k = u[k];
+//     int work = n-k-1;
+//     if(work == 0){return;}
+//     if(work < t){
+//         // double* a_k = a[k];
+//         for(int i = k+1; i < n; i++){ 
+//             l[k][i] = a[k][i]/x;
+//             u_k[i] = a[i][k];
+//         }
+//         return;
+//     }
+
+//     // double* a_k = a[k];
+//     int per_thread = work/t;
+    
+// #pragma omp parallel for num_threads(t)
+//     for(int my_rank = 0; my_rank < t; my_rank++){ 
+//         int i_start = k+1+ my_rank * per_thread;
+//         int i_end   = i_start + per_thread;
+//         if(my_rank == t-1){i_end = n;}
+//         for(int i = i_start; i < i_end; i++){
+//             l[k][i] = a[k][i]/x;
+//             u_k[i] = a[i][k];
+//         }
+//     }
+    for(int i = k+1; i < n; i++){ 
+        l[k][i] = a[k][i]/x;
+        u_k[i] = a[i][k];
+    }
+    return;
+
+    // return;
+}
+
+void upd_A_v4(double** a, int n, int k, double** u, double** l, int t){
     int work = n-k-1;
-    if(work == 0){return;}
-    if(work < t){
-        double* a_k = a[k];
-        for(int i = k+1; i < n; i++){ 
-            l[i][k] = a[i][k]/x;
-            u_k[i] = a_k[i];
+    if(work == 0){return;} // Happens when k == n-1
+    if(work < t){ // Too small, simply use sequential code
+        double* a_i;
+        double* l_i;
+        for(int i = k+1; i < n; i++){
+            for(int j = k+1; j < n; j++){
+                a[j][i] = a[j][i] - l[k][i]*u[k][j];
+                // a_i[j] = a_i[j] - l_i[k]*u_k[j];
+            }
         }
         return;
     }
 
-    double* a_k = a[k];
     int per_thread = work/t;
     
 #pragma omp parallel for num_threads(t)
@@ -573,16 +630,19 @@ void upd_UL_v4(double** a, int n, int k, double** u, double** l, int t){
         int i_start = k+1+ my_rank * per_thread;
         int i_end   = i_start + per_thread;
         if(my_rank == t-1){i_end = n;}
+        double* a_exp, *u_exp;
+        double* l_k = l[k];
+        double* u_k = u[k];
         for(int i = i_start; i < i_end; i++){
-            l[i][k] = a[i][k]/x;
-            u_k[i] = a_k[i];
+            double *a_i = a[i];
+            for(int j = k+1; j < n; j++){ 
+                a_i[j] = a_i[j] - l_k[j]*u_k[i];
+            }
         }
     }
 
     return;
-}
 
-void upd_A_v4(double** a, int n, int k, double** u, double** l, int t){
 
 }
 

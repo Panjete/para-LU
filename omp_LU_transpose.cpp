@@ -575,34 +575,34 @@ void upd_UL_v4(double** a, int n, int k, double** u, double** l, int t){
     double x = u[k][k];
     // cout << x << endl;
     double *u_k = u[k];
-//     int work = n-k-1;
-//     if(work == 0){return;}
-//     if(work < t){
-//         // double* a_k = a[k];
-//         for(int i = k+1; i < n; i++){ 
-//             l[k][i] = a[k][i]/x;
-//             u_k[i] = a[i][k];
-//         }
-//         return;
-//     }
+    int work = n-k-1;
+    if(work == 0){return;}
+    if(work < t){
+        // double* a_k = a[k];
+        for(int i = k+1; i < n; i++){ 
+            l[k][i] = a[k][i]/x;
+            u_k[i] = a[i][k];
+        }
+        return;
+    }
 
 //     // double* a_k = a[k];
-//     int per_thread = work/t;
+    int per_thread = work/t;
     
-// #pragma omp parallel for num_threads(t)
-//     for(int my_rank = 0; my_rank < t; my_rank++){ 
-//         int i_start = k+1+ my_rank * per_thread;
-//         int i_end   = i_start + per_thread;
-//         if(my_rank == t-1){i_end = n;}
-//         for(int i = i_start; i < i_end; i++){
-//             l[k][i] = a[k][i]/x;
-//             u_k[i] = a[i][k];
-//         }
-//     }
-    for(int i = k+1; i < n; i++){ 
-        l[k][i] = a[k][i]/x;
-        u_k[i] = a[i][k];
-    }
+    #pragma omp parallel for num_threads(t)
+        for(int my_rank = 0; my_rank < t; my_rank++){ 
+            int i_start = k+1+ my_rank * per_thread;
+            int i_end   = i_start + per_thread;
+            if(my_rank == t-1){i_end = n;}
+            for(int i = i_start; i < i_end; i++){
+                l[k][i] = a[k][i]/x;
+                u_k[i] = a[i][k];
+            }
+        }
+    // for(int i = k+1; i < n; i++){ 
+    //     l[k][i] = a[k][i]/x;
+    //     u_k[i] = a[i][k];
+    // }
     return;
 
     // return;
@@ -625,14 +625,14 @@ void upd_A_v4(double** a, int n, int k, double** u, double** l, int t){
 
     int per_thread = work/t;
     
+    double* l_k = l[k];
+    double* u_k = u[k];
+
 #pragma omp parallel for num_threads(t)
     for(int my_rank = 0; my_rank < t; my_rank++){ 
         int i_start = k+1+ my_rank * per_thread;
         int i_end   = i_start + per_thread;
         if(my_rank == t-1){i_end = n;}
-        double* a_exp, *u_exp;
-        double* l_k = l[k];
-        double* u_k = u[k];
         for(int i = i_start; i < i_end; i++){
             double *a_i = a[i];
             for(int j = k+1; j < n; j++){ 

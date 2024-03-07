@@ -46,5 +46,5 @@ And run using `./pth.out <matrixDimension> <numThreads>`
 ## Team
 
 Goonjan Saha         
-Gurarmaan S. Panjeta 
-Viraj Agashe         
+Gurarmaan S. Panjeta <br>
+Viraj Agashe <br>
